@@ -1,0 +1,73 @@
+module Project {
+    import 0x0.LibraCoin;
+    resource Project {
+        add: address,
+        project_value: LibraCoin.T
+    }
+    resource ProjectPass {
+        pass: bool
+    }
+    public init (valueP: LibraCoin.T): Self.Project {
+        let addr: address;
+        addr = get_txn_sender();
+        return Project {
+            add: move(addr), 
+            project_value: move(valueP)
+        };
+    }
+
+    public publishProject(account: Self.Project) {
+        move_to_sender<Project>(move(account));
+        return;
+    }
+    
+    public claim_money_project_worker(worker: address): Self.Project acquires Project {
+        let project: Self.Project;
+        let project_ref: &Self.Project;
+        let sender: address;
+    
+        project = move_from<Project>(move(worker));
+        project_ref = &project;
+    
+        sender = get_txn_sender();
+    
+        assert(*(&move(project_ref).add) == move(sender), 1); 
+        return move(project);
+    }
+
+    public claim_money_project_creator(): Self.Project acquires Project {
+        let project: Self.Project;
+        let sender: address;
+        sender = get_txn_sender();
+        project = move_from<Project>(move(sender));
+        return move(project);
+    }
+    
+    // public desProject(project: Self.Project): LibraCoin.T {
+    //     let project_value: LibraCoin.T;
+    //     let add: address;
+    //
+    //     Project { project_value, add } = move(project);
+    //    return move(project_value);
+    //}
+}
+
+import Transaction.Project;
+import 0x0.LibraCoin;
+import 0x0.LibraAccount;
+
+main(value: u64) {
+    let coin: LibraCoin.T;
+    let project: Project.Project;
+    let sender: address;
+
+    coin = LibraAccount.withdraw_from_sender(move(value));
+    project = Project.init(move(coin));
+    Project.publishProject(move(project));
+
+    project = Project.claim_money_project_creator();
+    coin = Project.desProject(move(project));
+    sender = get_txn_sender();
+    LibraAccount.deposit(move(sender), move(coin));
+    return;
+}
