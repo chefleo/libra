@@ -157,3 +157,4 @@ main(name: bytearray, value: u64) {
     LibraAccount.deposit(move(sender), move(coin));
     return;
 }
+

@@ -1,0 +1,60 @@
+module SavingGroup {
+    import 0x0.LibraCoin;
+    import 0x0.LibraAccount;
+
+    resource T {
+        balance: LibraCoin.T,
+        owner: address
+    }
+
+    struct ReceivedPaymentEvent {
+        payer: address,
+        amount: u64
+    }
+
+    public create() {
+        let t: Self.T;
+        let zero_balance: LibraCoin.T;
+        let sender: address; 
+
+        zero_balance = LibraCoin.zero();
+        sender = get_txn_sender();
+
+        t = T {
+            balance: move(zero_balance),
+            owner: move(sender)
+        };
+
+        return move(t);
+    }
+
+    public deposit(saving_group: address, amount: u64) {
+        let t: Self.T;
+        let t_ref: &Self.T;
+
+        let sender: address;
+
+        let deposit_value: u64;
+        let coin_before: LibraCoin.T;
+        let coin_added: LibraCoin.T;
+        let coin_after: LibraCoin.T;
+
+        sender = get_txn_sender();
+
+        deposit_value = LibraCoin.value(&amount);
+        assert(copy(deposit_value) > 0, 7);
+
+        coin_added = LibraAccount.withdraw_from_sender(move(amount));
+
+        T { coin_before, owner } = move(saving_group);
+
+        coin_after = LibraCoin.join(move(coin_before), move(coin_added));
+
+        t = T {
+            balance: move(coin_after),
+            owner: move(owner)
+        };
+
+        return move(t);
+    }
+}
