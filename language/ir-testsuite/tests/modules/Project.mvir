@@ -2,22 +2,45 @@ module Project {
     import 0x0.LibraCoin;
     resource Project {
         add: address,
-        project_value: LibraCoin.T
+        project_value: LibraCoin.T,
+        name_project: bytearray
     }
     resource ProjectPass {
-        pass: bool
+        pass: bool,
+        worker: address,
+        project: Self.Project
     }
-    public init (valueP: LibraCoin.T): Self.Project {
+    //Initializes project
+    public createProject (name: bytearray, valueP: LibraCoin.T): Self.Project {
         let addr: address;
         addr = get_txn_sender();
         return Project {
             add: move(addr), 
-            project_value: move(valueP)
+            project_value: move(valueP),
+            name_project: move(name)
         };
     }
-
+    //Publish project
     public publishProject(account: Self.Project) {
         move_to_sender<Project>(move(account));
+        return;
+    }
+
+    //Initializes worker
+    public worker(project: Self.Project): Self.ProjectPass {
+        let pass: bool;
+        let worker: address;
+        pass = false;
+        worker = get_txn_sender();
+        return ProjectPass {
+            pass: move(pass),
+            worker: move(worker),
+            project: move(project)
+        };
+    }
+    //Publish worker
+    public publish_worker(worker: Self.ProjectPass) {
+        move_to_sender<ProjectPass>(move(worker));
         return;
     }
     
@@ -35,6 +58,28 @@ module Project {
         return move(project);
     }
 
+    public givePass (creator: address, worker: address): Self.ProjectPass acquires Project{
+        let project: Self.Project;
+        let project_ref: &Self.Project;
+        let project_pass: Self.ProjectPass;
+        let pass: bool;
+        let sender: address;
+        sender = get_txn_sender();
+
+        project = move_from<Project>(move(creator));
+        project_ref = &project;
+
+        //Confirm that it is done by the creator
+        assert(*(&move(project_ref).add) == copy(sender), 2);
+        pass = true;
+        project_pass = ProjectPass {
+            pass: move(pass),
+            worker: move(worker),
+            project: move(project)
+        };
+        return move(project_pass);
+    }
+
     public claim_money_project_creator(): Self.Project acquires Project {
         let project: Self.Project;
         let sender: address;
@@ -42,29 +87,70 @@ module Project {
         project = move_from<Project>(move(sender));
         return move(project);
     }
+
+    //  Distruction resource project
+    public desProject(project: Self.Project): LibraCoin.T {
+        let project_value: LibraCoin.T;
+        let add: address;
+        let name_project: bytearray;
     
-    // public desProject(project: Self.Project): LibraCoin.T {
-    //     let project_value: LibraCoin.T;
-    //     let add: address;
-    //
-    //     Project { project_value, add } = move(project);
-    //    return move(project_value);
-    //}
+        Project { add, project_value, name_project } = move(project);
+        return move(project_value);
+    }
+
+    // Distruction resource worker
+    // public desWorker(worker: Self.ProjectPass) {
+    //     let pass: bool;
+    //     let addr: address;
+    //     let project: Self.Project;
+    //     ProjectPass { pass, addr, project } = move(worker);
+    //     return;
+    // }
+
+    public obtain_Project(creator_address: address): Self.Project acquires Project {
+        let project: Self.Project;
+        let project_ref: &Self.Project;
+        let sender: address;
+        project = move_from<Project>(move(creator_address));
+
+        project_ref = &project;
+        sender = get_txn_sender(); //Worker address
+        
+        assert(*(&move(project_ref).add) == move(sender), 10);
+
+        return move(project);
+    }
 }
 
 import Transaction.Project;
 import 0x0.LibraCoin;
 import 0x0.LibraAccount;
 
-main(value: u64) {
+main(name: bytearray, value: u64) {
     let coin: LibraCoin.T;
-    let project: Project.Project;
+    let project_creator: Project.Project;
+    let project_worker: Project.Project;
+    let project_pass: Project.ProjectPass;
+    let creator_address: address;
     let sender: address;
+    let worker: address;
 
+    //Creation project
     coin = LibraAccount.withdraw_from_sender(move(value));
-    project = Project.init(move(coin));
+    project_creator = Project.createProject(move(name), move(coin));
     Project.publishProject(move(project));
 
+    //Creation worker
+    project_worker = Project.obtain_Project(copy(creator_address));
+    project_pass = Project.worker(move(project_worker));
+    Project.publish_worker(move(project_pass)); //Publish resource worker
+
+    //Worker get pass main(worker: address)
+    project_pass = Project.givePass(copy(creator_address), move(worker));
+    Project.publish_worker(move(project_pass));//Publish resource worker after finish work who can obtain the money
+    
+
+    //Creator dismiss project
     project = Project.claim_money_project_creator();
     coin = Project.desProject(move(project));
     sender = get_txn_sender();
