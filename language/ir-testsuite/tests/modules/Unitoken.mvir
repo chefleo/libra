@@ -71,6 +71,26 @@ module UnipgToken {
             value: move(amount) 
         };
     }
+
+    //TODO: Fixed the error GLOBAL REFERENCE ERROR 
+    public transfer_UniToken(paying: address, receiver: address, amount: u64) acquires UniToken {
+        let paying_unitoken_ref: &mut Self.UniToken;
+        let receiver_unitoken_ref: &mut Self.UniToken;
+        let value_unitoken_paying: u64;
+        let value_unitoken_receiver: u64;
+
+        paying_unitoken_ref = borrow_global_mut<UniToken>(move(paying));
+        receiver_unitoken_ref = borrow_global_mut<UniToken>(move(receiver));
+
+        value_unitoken_paying = *(&copy(paying_unitoken_ref).value);
+        value_unitoken_receiver = *(&copy(receiver_unitoken_ref).value);
+
+        assert(copy(value_unitoken_paying) >= copy(amount), 4);
+
+        *(&mut move(paying_unitoken_ref).value) = move(value_unitoken_paying) - copy(amount);
+        *(&mut move(receiver_unitoken_ref).value) = move(value_unitoken_receiver) + move(amount);
+        return;
+    }
 }
 
 import Transaction.UnipgToken;
