@@ -38,6 +38,7 @@ module SavingGroup {
         let coin_before: LibraCoin.T;
         let coin_added: LibraCoin.T;
         let coin_after: LibraCoin.T;
+        let owner: address;
 
         sender = get_txn_sender();
 

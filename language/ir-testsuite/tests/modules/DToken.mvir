@@ -1,0 +1,96 @@
+module DToken {
+
+    // A resource representing the DToken
+    resource T {
+        value: u64,
+    }
+
+    // Publishes an initial zero dToken to the sender.
+    public publish() {
+        move_to_sender<T>(T{ value: 0 });
+        return;
+    } 
+
+    // Mint new dTokens.
+    public mint(value: u64): Self.T {
+        return T {
+            value: move(value)
+            };
+    }
+
+    // Returns an account's dToken balance.
+    public balance(): u64 acquires T{
+        let sender: address;
+        let token_ref: &mut Self.T;
+        let token_value: u64;
+
+        sender = get_txn_sender();
+        token_ref = borrow_global_mut<T>(move(sender)); //token_ref prende in prestito la risorsa T di sender
+        token_value = *(&move(token_ref).value);
+
+        return move(token_value);
+    }
+
+    // Deposit owned tokens to a payee's address
+    public deposit(payee: address, to_deposit: Self.T) acquires T {
+        let payee_token_ref: &mut Self.T;
+        let payee_token_value: u64;
+        let to_deposit_value: u64;
+
+        payee_token_ref = borrow_global_mut<T>(move(payee));
+        payee_token_value = *(&copy(payee_token_ref).value);
+
+        // Unpack and destroy to_deposit tokens
+        T{ to_deposit_value } = move(to_deposit);
+
+        // Increase the payees balance with the destroyed token amount
+        *(&mut move(payee_token_ref).value) = move(payee_token_value) + move(to_deposit_value);
+
+        return;
+    }
+
+    // Withdraw an amount of tokens of the sender and return it.
+    public withdraw(amount: u64): Self.T  acquires T {
+        let sender: address;
+        let sender_token_ref: &mut Self.T;
+        let value: u64;
+
+        sender = get_txn_sender();
+        sender_token_ref = borrow_global_mut<T>(move(sender));
+        value = *(&copy(sender_token_ref).value);
+
+        // Make sure that sender has enough tokens
+        assert(copy(value) >= copy(amount), 1);
+
+        // Split the senders token and return the amount specified
+        *(&mut move(sender_token_ref).value) = move(value) - copy(amount);
+        return T{ value: move(amount) };
+    }
+}
+
+// Performs simple testing to verify the published modules above.
+
+import Transaction.DToken;
+
+main() {
+
+    let sender: address;
+    let minted_tokens: DToken.T;
+    let balance: u64;
+
+    sender = get_txn_sender();
+
+    // Publish an dToken account
+    DToken.publish();
+
+    // Mint 100 dTokens
+    minted_tokens = DToken.mint(100);
+
+    // Deposit the freshly minted tokens
+    DToken.deposit(move(sender), move(minted_tokens));
+
+    balance = DToken.balance();
+    assert(move(balance) == 100, 3);
+
+    return;
+}

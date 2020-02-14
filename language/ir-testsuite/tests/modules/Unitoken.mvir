@@ -1,0 +1,97 @@
+module UnipgToken {
+
+    resource UniToken {
+        value: u64
+    }
+
+    public createToken(): Self.UniToken {
+        return UniToken {
+            value: 0
+        };
+    }
+
+    public publishToken(token: Self.UniToken) {
+        move_to_sender<UniToken>(move(token));
+        return;
+    }
+
+    public mint(value: u64): Self.UniToken {
+        return UniToken {
+            value: move(value)
+        };
+    }
+
+    public balance(): u64 acquires UniToken{
+        let sender: address;
+        let unitoken_ref: &mut Self.UniToken;
+        let unitoken_value: u64;
+
+        sender = get_txn_sender();
+        //Prende in prestito la risorsa UniToken di sender
+        unitoken_ref = borrow_global_mut<UniToken>(move(sender));
+        //Prende il valore della risorsa
+        unitoken_value = *(&move(unitoken_ref).value);
+
+        return move(unitoken_value);
+    }
+
+    //Deposita Unitoken del proprietario all'indirizzo di un beneficiario
+    public deposit(payee: address, to_deposit: Self.UniToken) acquires UniToken {
+        let payee_unitoken_ref: &mut Self.UniToken;
+        let payee_unitoken_value: u64;
+        let to_deposit_value: u64;
+
+        //Prende in prestito la risorsa UniToken di sender
+        payee_unitoken_ref = borrow_global_mut<UniToken>(move(payee));
+        //Prende il valore della risorsa
+        payee_unitoken_value = *(&copy(payee_unitoken_ref).value);
+
+        UniToken{ to_deposit_value } = move(to_deposit);
+
+        *(&mut move(payee_unitoken_ref).value) = move(payee_unitoken_value) + move(to_deposit_value);
+
+        return;
+    }
+
+    public withdraw(amount: u64): Self.UniToken acquires UniToken{
+        let sender: address;
+        let sender_unitoken_ref: &mut Self.UniToken;
+        let value: u64;
+
+        sender = get_txn_sender();
+        //Prende il riferimento
+        sender_unitoken_ref = borrow_global_mut<UniToken>(move(sender));
+        //Prende il valore dal riferimento ottenuto
+        value = *(&copy(sender_unitoken_ref).value);
+        //Vede se ha i soldi sul deposito
+        assert(copy(value) >= copy(amount), 1);
+        //Cambia il suo valore
+        *(&mut move(sender_unitoken_ref).value) = move(value) - copy(amount);
+        return UniToken{ 
+            value: move(amount) 
+        };
+    }
+}
+
+import Transaction.UnipgToken;
+main() {
+
+    let sender: address;
+    let minted_tokens: UnipgToken.UniToken;
+    let balance: u64;
+    let token: UnipgToken.UniToken; 
+
+    sender = get_txn_sender();
+
+    token = UnipgToken.createToken();
+    UnipgToken.publishToken(move(token));
+
+    //Conia 100 Unitoken
+    minted_tokens = UnipgToken.mint(100);
+
+    // Deposit the freshly minted tokens
+    UnipgToken.deposit(move(sender), move(minted_tokens));
+
+    balance = UnipgToken.balance();
+    return;
+}

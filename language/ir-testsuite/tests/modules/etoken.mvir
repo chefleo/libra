@@ -3,18 +3,15 @@
 //     by Dr. Omri Ross, Peter Emil Jensen and Johannes Rude Jensen
 //   see https://github.com/etoroxlabs/etoken-libra
 module Capability {
-
     // Capability is responsible for declaring an account's permissions.
     // We define the notion of an owner, minter and blacklisted.
     // Only the owner can assign blacklisted and minter capabilities.
-
     // The owner is defined by hardcoding its account before publishing the module.
 
-    // -----------------------------------------------------------------
-
     // Declare owner as a resource. It's only meant to be published once
-    resource Owner { }
-
+    resource Owner {
+        _dummy: bool
+     }
     // Declare a resource that declares an address's capabilities.
     // Every address using EToken will need to publish a resource themselves.
     // However, only the owner can change its content.
@@ -22,14 +19,12 @@ module Capability {
         minter: bool,
         blacklisted: bool,
     }
-
     // Every account should execute this once before using Capability and EToken module.
     // If the sender is the hardcoded owner, then owner capability is published.
     // Reverts if already published
     public publish() {
         let sender: address;
         sender = get_txn_sender();
-
         // Publish owner capability if sender is the privileged account
         // Uncomment the following line in production and use a real owner account: if (move(sender) == 0x0) {
         if (true) {
@@ -45,31 +40,31 @@ module Capability {
 
     // Internal function that grants owner capability
     grant_owner_capability() {
-        move_to_sender<Owner>(Owner {});
+        move_to_sender<Owner>(Owner { _dummy: true});
         return;
     }
-
+    //Concede il mint
     // Grants minter capability to receiver, but can only succeed if sender owns the owner capability.
-    public grant_minter_capability(receiver: address, owner_capability: &Self.Owner) {
+    public grant_minter_capability(receiver: address, owner_capability: &Self.Owner) acquires T {
         let capability_ref: &mut Self.T;
 
         //release(move(owner_capability));          RELEASE??????
 
         // Pull a mutable reference to the receiver's capability, and change its permission.
-        capability_ref = borrow_global<T>(move(receiver));
+        capability_ref = borrow_global_mut<T>(move(receiver));
         *(&mut move(capability_ref).minter) = true;
 
         return;
     }
-
+    //Va nella lista nera
     // Grants blacklist capability to receiver, but can only succeed if sender owns the owner capability.
-    public grant_blacklisted_capability(receiver: address, owner_capability: &Self.Owner) {
+    public grant_blacklisted_capability(receiver: address, owner_capability: &Self.Owner) acquires T {
         let capability_ref: &mut Self.T;
 
         //release(move(owner_capability));
 
         // Pull a mutable reference to the receiver's capability, and change its permission.
-        capability_ref = borrow_global<T>(move(receiver));
+        capability_ref = borrow_global_mut<T>(move(receiver));
         *(&mut move(capability_ref).blacklisted) = true;
 
         return;
@@ -78,14 +73,16 @@ module Capability {
     // This returns an immutable reference to the owner capability if it exists.
     // Is used by the owner to show ownership to privileged functions.
     // Reverts if owner capability does not exist.
-    public borrow_owner_capability(): &Self.Owner {
+    public borrow_owner_capability(): &Self.Owner acquires Owner {
         let sender: address;
         let owner_capability_ref: &mut Self.Owner;
         let owner_capability_immut_ref: &Self.Owner;
 
         sender = get_txn_sender();
-        owner_capability_ref = borrow_global<Owner>(move(sender));
-        owner_capability_immut_ref = freeze(move(owner_capability_ref));
+        //owner_capability_ref = borrow_global_mut<Owner>(move(sender));
+        //owner_capability_immut_ref = freeze(move(owner_capability_ref));
+
+        owner_capability_immut_ref = borrow_global<Owner>(move(sender));
 
         return move(owner_capability_immut_ref);
     }
@@ -93,14 +90,16 @@ module Capability {
     // This returns an immutable reference to the general capability if it exists.
     // Should be used by every account to prove capabilities.
     // Reverts if capability does not exist.
-    public borrow_capability(): &Self.T {
+    public borrow_capability(): &Self.T acquires T {
         let sender: address;
         let capability_ref: &mut Self.T;
         let capability_immut_ref: &Self.T;
 
         sender = get_txn_sender();
-        capability_ref = borrow_global<T>(move(sender));
-        capability_immut_ref = freeze(move(capability_ref));
+        //capability_ref = borrow_global_mut<T>(move(sender));
+        //capability_immut_ref = freeze(move(capability_ref));
+
+        capability_immut_ref = borrow_global<T>(move(sender));
 
         return move(capability_immut_ref);
     }
@@ -137,42 +136,35 @@ module Capability {
 }
 
 module EToken {
-
     // This module is responsible for an actual eToken.
     // For it to be useful a capability has to be published by using the Capability module above.
-    
     // -----------------------------------------------------------------
-
     import Transaction.Capability;
-
     // Declare the eToken resource, storing an account's total balance.
     resource T {
         value: u64,
     }
-
     // Publishes an initial zero eToken to the sender.
     // Should be called once before using this module.
     public publish() {
         move_to_sender<T>(T{ value: 0 });
         return;
     }
-
     // Mint new eTokens.
     // Reverts if capability does not allow it.
     public mint(value: u64, capability: &Capability.T): Self.T {
-        Capability.require_minter(move(capability));
+        Capability.require_minter(move(capability)); //Vede se puo usare mint
         return T{value: move(value)};
     }
-
     // Returns an account's eToken balance.
     // Reverts if an initial eToken hasn't been published.
-    public balance(): u64 {
+    public balance(): u64 acquires T {
         let sender: address;
         let token_ref: &mut Self.T;
         let token_value: u64;
 
         sender = get_txn_sender();
-        token_ref = borrow_global<T>(move(sender));
+        token_ref = borrow_global_mut<T>(move(sender));
         token_value = *(&move(token_ref).value);
 
         return move(token_value);
@@ -180,14 +172,14 @@ module EToken {
 
     // Deposit owned tokens to an payee's address, and destroy the tokens to deposit,
     // Reverts if user is blacklisted.
-    public deposit(payee: address, to_deposit: Self.T, capability: &Capability.T) {
+    public deposit(payee: address, to_deposit: Self.T, capability: &Capability.T) acquires T {
         let payee_token_ref: &mut Self.T;
         let payee_token_value: u64;
         let to_deposit_value: u64;
 
         Capability.require_not_blacklisted(move(capability));
 
-        payee_token_ref = borrow_global<T>(move(payee));
+        payee_token_ref = borrow_global_mut<T>(move(payee));
         payee_token_value = *(&copy(payee_token_ref).value);
 
         // Unpack and destroy to_deposit tokens
@@ -201,7 +193,7 @@ module EToken {
 
     // Withdraw an amount of tokens of the sender and return it.
     // This works by splitting the token published and returning the specified amount as tokens. 
-    public withdraw(amount: u64, capability: &Capability.T): Self.T {
+    public withdraw(amount: u64, capability: &Capability.T): Self.T acquires T {
         let sender: address;
         let sender_token_ref: &mut Self.T;
         let value: u64;
@@ -209,7 +201,7 @@ module EToken {
         Capability.require_not_blacklisted(move(capability));
 
         sender = get_txn_sender();
-        sender_token_ref = borrow_global<T>(move(sender));
+        sender_token_ref = borrow_global_mut<T>(move(sender));
         value = *(&copy(sender_token_ref).value);
 
         // Make sure that sender has enough tokens
