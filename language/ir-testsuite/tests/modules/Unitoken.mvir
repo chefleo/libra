@@ -71,36 +71,40 @@ module UnipgToken {
             value: move(amount) 
         };
     }
-
-    //TODO: Fixed the error GLOBAL REFERENCE ERROR 
+ 
     public transfer_UniToken(paying: address, receiver: address, amount: u64) acquires UniToken {
         let paying_unitoken_ref: &mut Self.UniToken;
         let receiver_unitoken_ref: &mut Self.UniToken;
         let value_unitoken_paying: u64;
         let value_unitoken_receiver: u64;
 
+        //Prendo l'indirizzo del pagante
         paying_unitoken_ref = borrow_global_mut<UniToken>(move(paying));
-        receiver_unitoken_ref = borrow_global_mut<UniToken>(move(receiver));
 
         value_unitoken_paying = *(&copy(paying_unitoken_ref).value);
-        value_unitoken_receiver = *(&copy(receiver_unitoken_ref).value);
-
+        //Vedo se ha i soldi per il trasferimento
         assert(copy(value_unitoken_paying) >= copy(amount), 4);
-
+        //Muta il valore del Unitoken che ha in possesso(in questo caso dato che paga il suo valore diminuisce)
         *(&mut move(paying_unitoken_ref).value) = move(value_unitoken_paying) - copy(amount);
+
+        //Prende il riferimento del ricevitore
+        receiver_unitoken_ref = borrow_global_mut<UniToken>(move(receiver));
+        //Vede il suo valore
+        value_unitoken_receiver = *(&copy(receiver_unitoken_ref).value);
+        //Muta il valore del Unitoken che ha in possesso(in questo caso dato che riceve il suo valore aumenta)
         *(&mut move(receiver_unitoken_ref).value) = move(value_unitoken_receiver) + move(amount);
         return;
     }
-}
 
-import Transaction.UnipgToken;
+}
+//! new-transaction
+import {{default}}.UnipgToken;
 main() {
 
     let sender: address;
     let minted_tokens: UnipgToken.UniToken;
     let balance: u64;
     let token: UnipgToken.UniToken; 
-
     sender = get_txn_sender();
 
     token = UnipgToken.createToken();
@@ -109,9 +113,10 @@ main() {
     //Conia 100 Unitoken
     minted_tokens = UnipgToken.mint(100);
 
-    // Deposit the freshly minted tokens
-    UnipgToken.deposit(move(sender), move(minted_tokens));
+    // Deposita i token
+    UnipgToken.deposit(copy(sender), move(minted_tokens));
 
     balance = UnipgToken.balance();
+
     return;
 }
